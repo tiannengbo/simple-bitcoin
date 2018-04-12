@@ -1,19 +1,36 @@
 import hashlib
 from ecdsa import SECP256k1, SigningKey
+import sys
 
 # 58 character alphabet used
 BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
+def from_bytes (data, big_endian = False):
+    if isinstance(data, str):
+        data = bytearray(data)
+    if big_endian:
+        data = reversed(data)
+    num = 0
+    for offset, byte in enumerate(data):
+        num += byte << (offset * 8)
+    return num
+    
 def base58_encode(version, public_address):
     """
     Gets a Base58Check string
     See https://en.bitcoin.it/wiki/Base58Check_encoding
     """
-    version = bytes.fromhex(version)
+    if sys.version_info.major > 2:
+        version = bytes.fromhex(version)
+    else:
+        version = bytearray.fromhex(version)
     checksum = hashlib.sha256(hashlib.sha256(version + public_address).digest()).digest()[:4]
     payload = version + public_address + checksum
     
-    result = int.from_bytes(payload, byteorder="big")
+    if sys.version_info.major > 2:
+        result = int.from_bytes(payload, byteorder="big")
+    else:
+        result = from_bytes(payload, True)
     
     # count the leading 0s
     padding = len(payload) - len(payload.lstrip(b'\0'))
@@ -26,12 +43,18 @@ def base58_encode(version, public_address):
     return padding*"1" + "".join(encoded)[::-1]
 
 def get_private_key(hex_string):
-    return bytes.fromhex(hex_string.zfill(64))
+    if sys.version_info.major > 2:
+        return bytes.fromhex(hex_string.zfill(64))
+    else:
+        return bytearray.fromhex(hex_string.zfill(64))
 
 def get_public_key(private_key):
     # this returns the concatenated x and y coordinates for the supplied private address
     # the prepended 04 is used to signify that it's uncompressed
-    return (bytes.fromhex("04") + SigningKey.from_string(private_key, curve=SECP256k1).verifying_key.to_string())
+    if sys.version_info.major > 2:
+        return (bytes.fromhex("04") + SigningKey.from_string(private_key, curve=SECP256k1).verifying_key.to_string())
+    else:
+        return (bytearray.fromhex("04") + SigningKey.from_string(private_key, curve=SECP256k1).verifying_key.to_string())
 
 def get_public_address(public_key):
     address = hashlib.sha256(public_key).digest()
